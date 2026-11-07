@@ -1,0 +1,51 @@
+name: build-windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build (Tauri bundle)
+        run: npm run tauri build
+
+      - name: Collect artifacts
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          Copy-Item "src-tauri/target/release/open-chunithm-launcher.exe" "out/" -Force
+          if (Test-Path "src-tauri/target/release/bundle") {
+            Copy-Item "src-tauri/target/release/bundle/*" "out/" -Recurse -Force
+          }
+          Get-ChildItem -Path out -Recurse | Select-Object FullName, Length
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-chunithm-launcher-windows
+          path: out/**
+          if-no-files-found: error
+          retention-days: 30
